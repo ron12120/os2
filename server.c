@@ -1,116 +1,106 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <errno.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <poll.h>
-#include <fcntl.h>
 
-#define PORT 8080
-#define BACKLOG 10 // How many pending connections queue will hold
+#include "server.h"
 
-struct flock lock;
-
-void lock_file(char *file_path)
+int main(int argc, char **argv)
 {
-    int fd = open(file_path, O_RDWR);
-    if (fd == -1)
+    if (argc != 2)
     {
-        perror("open");
+        fprintf(stderr, "Usage: $ sudo ./server <root dir>");
         exit(EXIT_FAILURE);
     }
 
-    struct flock lock;
-    memset(&lock, 0, sizeof(lock));
-    lock.l_type = F_WRLCK;    // Exclusive lock
-    lock.l_whence = SEEK_SET; // Beginning of file
-    lock.l_start = 0;         // Offset from l_whence
-    lock.l_len = 0;           // 0 means lock the whole file
-
-    if (fcntl(fd, F_SETLK, &lock) == -1)
-    {
-        perror("fcntl");
-        close(fd);
-        exit(EXIT_FAILURE);
-    }
-
-    close(fd);
-}
-
-void unlock_file(char *file_path)
-{
-    int fd = open(file_path, O_RDWR);
-    if (fd == -1)
-    {
-        perror("open");
-        exit(EXIT_FAILURE);
-    }
-
-    lock.l_type = F_UNLCK;
-    if (fcntl(fd, F_SETLK, &lock) == -1)
-    {
-        perror("fcntl unlock");
-        close(fd);
-        exit(EXIT_FAILURE);
-    }
-
-    close(fd);
-}
-
-int main()
-{
-
-    int server_fd, new_socket;
-    struct sockaddr_in address;
-    int opt = 1;
-    int addrlen = sizeof(address);
-
-    // Creating socket file descriptor
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
+    int sock = -1;
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0)
     {
         perror("socket failed");
-        exit(EXIT_FAILURE);
+        exit(errno);
     }
 
-    // Forcefully attaching socket to the port 8080
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)))
+    struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    if (inet_pton(AF_INET, ADDR, &server_addr.sin_addr) < 0)
     {
-        perror("setsockopt");
-        exit(EXIT_FAILURE);
+        perror("inet_pton failed");
+        close(sock);
+        exit(errno);
     }
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
 
-    // Bind the socket to the port 8080
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
+    if (bind(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
         perror("bind failed");
-        exit(EXIT_FAILURE);
+        close(sock);
+        exit(errno);
     }
 
-    struct pollfd fds[BACKLOG + 1];
-    memset(fds, 0, sizeof(fds)); // Initialize pollfd structure
-    fds[0].fd = 0;
-    fds[0].events = POLLIN;
-
-    if (listen(server_fd, BACKLOG + 1) < 0)
+    if (listen(sock, 1) < 0)
     {
-        perror("listen");
-        exit(EXIT_FAILURE);
+        perror("listen failed");
+        close(sock);
+        exit(errno);
     }
+    printf("listening on: %s:%d\n", ADDR, PORT);
 
-    while (1)
+    int client = -1;
+    client = accept(sock, NULL, NULL);
+    if (client < 0)
     {
-        printf("Awaiting connections...\n");
-        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
-        {
-            perror("accept");
-            exit(EXIT_FAILURE);
-        }
-
-        close(new_socket);
+        perror("accept failed");
+        close(sock);
+        exit(errno);
     }
+    printf("client connected\n");
+
+    char buffer[BUFSIZ];
+    memset(buffer, 0, BUFSIZ);
+    ssize_t bytes_recv = 0;
+    bytes_recv = recv(client, buffer, BUFSIZ, 0);
+    if (bytes_recv < 0)
+    {
+        perror("recv failed");
+        close(client);
+        close(sock);
+        exit(errno);
+    }
+    else if (bytes_recv == 0)
+    {
+        close(client);
+        close(sock);
+        return 0;
+    }
+    
+    pget request = (pget)buffer;
+    printf("remote_path: %s\n", request->remote_path);
+    // printf("method: %s\nremote_path: %s\ncrlf: %s", request->get_str, request->remote_path, request->crlf);
+
+    // printf("received: %s\n", buffer);
+
+    // // procerssing
+    // memset(buffer, '1', BUFSIZ);
+
+    // ssize_t bytes_sent = 0;
+    // bytes_sent = send(client, buffer, BUFSIZ, 0);
+    // if(bytes_sent < 0)
+    // {
+    //     perror("recv failed");
+    //     close(client);
+    //     close(sock);
+    //     exit(errno);
+    // }
+
+    // printf("ans was sent to client\n");
+
+    close(client);
+    close(sock);
+
     return 0;
 }
