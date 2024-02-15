@@ -13,9 +13,12 @@
 #include <math.h>
 #include <openssl/bio.h>
 #include <openssl/evp.h>
+#include <sys/time.h>
+
 
 #define PORT 8086
 #define ADDR "127.0.0.1"
+
 
 struct flock fl = {
     .l_type = F_WRLCK,
@@ -109,8 +112,9 @@ int GET(int client_fd, char *path)
     file = fopen(path, "rb");
     if (file == NULL)
     {
-        send(client_fd, "24", 3, 0);
-        send(client_fd, "404 FILE NOT FOUND\r\n\r\n", 24, 0);
+        send(client_fd, "23", 3, 0);
+        sleep(0.5);
+        send(client_fd, "404 FILE NOT FOUND\r\n\r\n", 23, 0);
         return -1; // Indicate failure
     }
 
@@ -124,13 +128,14 @@ int GET(int client_fd, char *path)
     if (!buffer)
     {
         fclose(file);
-        send(client_fd, "25", 3, 0);
-        send(client_fd, "500 INTERNAL ERROR\r\n\r\n", 25, 0);
+        send(client_fd, "23", 3, 0);
+        sleep(0.5);
+        send(client_fd, "500 INTERNAL ERROR\r\n\r\n", 23, 0);
         return -1; // Indicate failure
     }
 
     // Read the file into the buffer
-    fread(buffer,1,file_size,file);
+    fread(buffer, 1, file_size, file);
     buffer[file_size] = '\0'; // Null-terminate the buffer to treat it as a C-string
     fclose(file);             // Close the file as soon as we're done with it
 
@@ -138,8 +143,9 @@ int GET(int client_fd, char *path)
     if (Base64Encode((const char *)buffer, &encoded_data) != 0)
     {
         free(buffer); // Make sure to free the buffer if encoding fails
-        send(client_fd, "25", 3, 0);
-        send(client_fd, "500 INTERNAL ERROR\r\n\r\n", 25, 0);
+        send(client_fd, "23", 3, 0);
+        sleep(0.5);
+        send(client_fd, "500 INTERNAL ERROR\r\n\r\n", 23, 0);
         return -1; // Indicate failure
     }
     int res_size = file_size + 14;
@@ -150,6 +156,7 @@ int GET(int client_fd, char *path)
     // Free the buffer as it's no longer needed
     free(buffer);
     send(client_fd, res_sizeS, 1024, 0);
+    sleep(0.5);
     char response[res_size];
     memset(response, 0, res_size);
     strcat(response, "200 OK\r\n");
