@@ -70,20 +70,43 @@ int main(int argc, char **argv)
 
     if (!strcmp(c, "1"))
     {
-        char size[1024]; 
-        memset(size,0,1024);
-        bytes_recv=0;
-        bytes_recv = recv(sock, size,1024, 0); // recving the options from server
-        int size_res=atoi(size);
-        bytes_recv=0;
+        char size[1024];
+        memset(size, 0, 1024);
+        bytes_recv = 0;
+        bytes_recv = recv(sock, size, 1024, 0); // recving the size of the response
+        int size_res = atoi(size);
         char res[size_res];
-        memset(res,0,size_res);
-        bytes_recv = recv(sock,res ,size_res, 0);
-        printf("%s\n", res);
+        memset(res, 0, size_res);
+        bytes_recv = 0;
+        bytes_recv = recv(sock, res, size_res, 0);
+        printf("%s", res);
     }
     else if (!strcmp(c, "0"))
     {
+        FILE *file = fopen(argv[1], "r");
+        if (file == NULL)
+        {
+            perror("fopen failed");
+            close(sock);
+            exit(errno);
+        }
+        fseek(file, 0, SEEK_END);
+        int size = ftell(file);
+        rewind(file);
+        char buffer[size+1];
+        memset(buffer, 0, size+1);
+        // Read the file into the buffer
+        fread(buffer, 1, size, file);
+        buffer[size] = '\0'; // Null-terminate the buffer to treat it as a C-string
+        fclose(file);             // Close the file as soon as we're done with it
+        printf("buffer is %s\n", buffer);
 
+        char file_size[1024];
+        memset(file_size, 0, 1024);
+        sprintf(file_size, "%d", size);
+        send(sock, file_size, 1024, 0); // sending the encripted file size
+        sleep(0.5);
+        send(sock, buffer, size, 0);
     }
 
     close(sock);

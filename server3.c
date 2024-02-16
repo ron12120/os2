@@ -15,10 +15,8 @@
 #include <openssl/evp.h>
 #include <sys/time.h>
 
-
 #define PORT 8086
 #define ADDR "127.0.0.1"
-
 
 struct flock fl = {
     .l_type = F_WRLCK,
@@ -171,6 +169,30 @@ int GET(int client_fd, char *path)
     return 0; // Indicate success
 }
 
+int POST(int client_fd, char *path)
+{
+    lockFile(path);
+
+    char size[1024];
+    memset(size, 0, 1024);
+    recv(client_fd, size, 1024, 0); // recving the size of the encripted file
+    int size_res = atoi(size);
+    char response[size_res];
+    memset(response, 0, size_res);
+    recv(client_fd, response, size_res, 0); // recving the size of the encripted file
+    FILE *file;
+    file = fopen(path, "w+"); // saving the file
+    if (file == NULL)
+    {
+        return -1; // Indicate failure
+    }
+    fwrite(response, sizeof(char), size_res, file);
+    fclose(file);
+
+    return 0;
+
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 2)
@@ -259,7 +281,7 @@ int main(int argc, char **argv)
             }
             char c[1];
             ssize_t bytes_recv = 0;
-            bytes_recv = recv(new_socket, c, sizeof(c), 0); // recving the choice
+            bytes_recv = recv(new_socket, c, 1, 0); // recving the choice
             if (bytes_recv < 0)
             {
                 perror("recv failed");
@@ -267,6 +289,7 @@ int main(int argc, char **argv)
                 close(sock);
                 exit(errno);
             }
+            int post_get = atoi(c);
 
             char remote_path_client[1024];
             memset(remote_path_client, 0, 1024);
@@ -285,8 +308,7 @@ int main(int argc, char **argv)
             strcpy(full_path, argv[1]);
             strcat(full_path, remote_path_client);
 
-            printf("the path is: %s\n ", full_path);
-            if (strcmp(c, "1"))
+            if (post_get == 1)
             {
                 if (GET(new_socket, full_path) < 0)
                 {
@@ -297,17 +319,17 @@ int main(int argc, char **argv)
                 }
                 unlockFile(full_path);
             }
-            else if (!strcmp(c, "0"))
+            else if (post_get == 0)
             {
-                // lockFile(full_path);
-                // if (POST() < 0)
-                // {
-                //     perror("POST failed");
-                //     close(new_socket);
-                //     close(sock);
-                //     exit(errno);
-                // }
-                // unlockFile(full_path);
+                lockFile(full_path);
+                if (POST(new_socket, full_path) < 0)
+                {
+                    perror("POST failed");
+                    close(new_socket);
+                    close(sock);
+                    exit(errno);
+                }
+                unlockFile(full_path);
             }
 
             close(new_socket);
