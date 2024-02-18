@@ -1,4 +1,18 @@
-#include "server.h"
+#include <fcntl.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <errno.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <math.h>
+#include <openssl/bio.h>
+#include <openssl/evp.h>
+#include <sys/time.h>
+
+#define PORT 80
+#define ADDR "127.0.0.1"
 
 int main(int argc, char **argv)
 {
@@ -93,20 +107,18 @@ int main(int argc, char **argv)
         fseek(file, 0, SEEK_END);
         int size = ftell(file);
         rewind(file);
-        char buffer[size+1];
-        memset(buffer, 0, size+1);
+        char buffer[size + 1];
+        memset(buffer, 0, size + 1);
         // Read the file into the buffer
         fread(buffer, 1, size, file);
         buffer[size] = '\0'; // Null-terminate the buffer to treat it as a C-string
-        fclose(file);             // Close the file as soon as we're done with it
-        printf("buffer is %s\n", buffer);
-
+        fclose(file);        // Close the file as soon as we're done with it
         char file_size[1024];
         memset(file_size, 0, 1024);
-        sprintf(file_size, "%d", size);
-        send(sock, file_size, 1024, 0); // sending the encripted file size
+        sprintf(file_size, "%d", size + 1);
+        send(sock, file_size, sizeof(file_size), 0); // sending the encripted file size
         sleep(0.5);
-        send(sock, buffer, size, 0);
+        send(sock, buffer, size + 1, 0);
     }
 
     close(sock);

@@ -6,16 +6,12 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
-#include <signal.h>
-#include <wait.h>
-#include <string.h>
-#include <stdio.h>
 #include <math.h>
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <sys/time.h>
 
-#define PORT 8086
+#define PORT 80
 #define ADDR "127.0.0.1"
 
 struct flock fl = {
@@ -71,6 +67,41 @@ int unlockFile(const char *filepath)
     return 0;
 }
 
+int calcDecodeLength(const char *b64input)
+{ // Calculates the length of a decoded base64 string
+    int len = strlen(b64input);
+    int padding = 0;
+
+    if (b64input[len - 1] == '=' && b64input[len - 2] == '=') // last two chars are =
+        padding = 2;
+    else if (b64input[len - 1] == '=') // last char is =
+        padding = 1;
+
+    return (int)len * 0.75 - padding;
+}
+
+int Base64Decode(char *b64message, char **buffer)
+{ // Decodes a base64 encoded string
+    BIO *bio, *b64;
+    int decodeLen = calcDecodeLength(b64message);
+    int len = 0;
+    *buffer = (char *)malloc(decodeLen + 1);
+    FILE *stream = fmemopen(b64message, strlen(b64message), "r");
+
+    b64 = BIO_new(BIO_f_base64());
+    bio = BIO_new_fp(stream, BIO_NOCLOSE);
+    bio = BIO_push(b64, bio);
+    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL); // Do not use newlines to flush buffer
+    len = BIO_read(bio, *buffer, strlen(b64message));
+    // Can test here if len == decodeLen - if not, then return an error
+    (*buffer)[len] = '\0';
+
+    BIO_free_all(bio);
+    fclose(stream);
+
+    return (0); // success
+}
+
 int Base64Encode(const char *message, char **buffer)
 { // Encodes a string to base64
     BIO *bio, *b64;
@@ -88,7 +119,7 @@ int Base64Encode(const char *message, char **buffer)
     BIO_free_all(bio);
     fclose(stream);
 
-    return 0; // Success
+    return (0); // success
 }
 
 int getFileSize(FILE *file)
@@ -104,7 +135,7 @@ int GET(int client_fd, char *path)
     FILE *file;
     unsigned char *buffer;
     size_t file_size;
-    char *encoded_data;
+    char *decoded_data;
 
     // Open the file
     file = fopen(path, "rb");
@@ -138,7 +169,7 @@ int GET(int client_fd, char *path)
     fclose(file);             // Close the file as soon as we're done with it
 
     // Encode the content to Base64
-    if (Base64Encode((const char *)buffer, &encoded_data) != 0)
+    if (Base64Decode(buffer, &decoded_data) != 0)
     {
         free(buffer); // Make sure to free the buffer if encoding fails
         send(client_fd, "23", 3, 0);
@@ -146,7 +177,9 @@ int GET(int client_fd, char *path)
         send(client_fd, "500 INTERNAL ERROR\r\n\r\n", 23, 0);
         return -1; // Indicate failure
     }
-    int res_size = file_size + 14;
+
+    printf("decoded data %s\n", decoded_data);
+    int res_size = strlen(decoded_data) + 14;
     char res_sizeS[1024];
     memset(res_sizeS, 0, res_size);
 
@@ -158,39 +191,47 @@ int GET(int client_fd, char *path)
     char response[res_size];
     memset(response, 0, res_size);
     strcat(response, "200 OK\r\n");
-    strcat(response, encoded_data);
+    strcat(response, decoded_data);
     strcat(response, "\r\n\r\n");
     // Send the response with the encoded data
     send(client_fd, response, res_size, 0);
 
     // Free the encoded data after sending it
-    free(encoded_data);
+    free(decoded_data);
 
     return 0; // Indicate success
 }
 
 int POST(int client_fd, char *path)
 {
-    lockFile(path);
-
+    char *encoded_data;
+    ssize_t bytes_recv;
     char size[1024];
-    memset(size, 0, 1024);
-    recv(client_fd, size, 1024, 0); // recving the size of the encripted file
+    memset(size,0,1024);
+    bytes_recv = 0;
+    bytes_recv = recv(client_fd, size, 1024,0); // recving the size of the encripted file
+    printf("the size is: %s\n", size);
     int size_res = atoi(size);
     char response[size_res];
     memset(response, 0, size_res);
-    recv(client_fd, response, size_res, 0); // recving the size of the encripted file
+    bytes_recv = 0;
+    bytes_recv = recv(client_fd, response, size_res, 0); // recving the size of the encripted file
+    printf("the response is: %s\n", response);
+    if (Base64Encode(response, &encoded_data) != 0)
+    {
+        return -1; // Indicate failure
+    }
     FILE *file;
-    file = fopen(path, "w+"); // saving the file
+    file = fopen(path, "w"); // saving the file
     if (file == NULL)
     {
         return -1; // Indicate failure
     }
-    fwrite(response, sizeof(char), size_res, file);
+    // lockFile(path);
+    printf("%s\n", encoded_data);
+    fwrite(encoded_data, sizeof(char), strlen(encoded_data), file);
     fclose(file);
-
     return 0;
-
 }
 
 int main(int argc, char **argv)
@@ -243,8 +284,6 @@ int main(int argc, char **argv)
     }
     printf("listening on: %s:%d\n", ADDR, PORT);
 
-    // Ignore SIGCHLD to prevent zombie processes
-    signal(SIGCHLD, SIG_IGN);
     int new_socket;
     while (1)
     {
@@ -269,6 +308,7 @@ int main(int argc, char **argv)
         // Child process
         if (pid == 0)
         {
+            close(sock);
             char choice[32] = "to POST press 0 to GET press 1\n";
             ssize_t bytes_sent = 0;
             bytes_sent = send(new_socket, choice, 32, 0); // sending the options to client
@@ -321,7 +361,6 @@ int main(int argc, char **argv)
             }
             else if (post_get == 0)
             {
-                lockFile(full_path);
                 if (POST(new_socket, full_path) < 0)
                 {
                     perror("POST failed");
@@ -329,17 +368,11 @@ int main(int argc, char **argv)
                     close(sock);
                     exit(errno);
                 }
-                unlockFile(full_path);
+                // unlockFile(full_path);
             }
-
-            close(new_socket);
             exit(0); // Child process exits after handling
         }
-        else
-        {
-            // Parent process
-            close(new_socket); // Parent doesn't need this
-        }
     }
-    close(sock);
+    close(new_socket);
+    return 0;
 }
