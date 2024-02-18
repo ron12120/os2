@@ -100,10 +100,11 @@ int main(int argc, char **argv)
         FILE *file = fopen(argv[1], "r");
         if (file == NULL)
         {
-            perror("fopen failed");
+            perror("fopen failed8");
             close(sock);
             exit(errno);
         }
+
         fseek(file, 0, SEEK_END);
         int size = ftell(file);
         rewind(file);
@@ -116,9 +117,20 @@ int main(int argc, char **argv)
         char file_size[1024];
         memset(file_size, 0, 1024);
         sprintf(file_size, "%d", size + 1);
-        send(sock, file_size, sizeof(file_size), 0); // sending the encripted file size
+        sleep(1);
+        if (send(sock, file_size, 1024, 0) < 0) // sending the encripted file size
+        {
+            perror("send size failed");
+            close(sock);
+            exit(errno);
+        }
         sleep(0.5);
-        send(sock, buffer, size + 1, 0);
+        if (send(sock, buffer, size + 1, 0) < 0) // sending the encripted file size
+        {
+            perror("send data failed");
+            close(sock);
+            exit(errno);
+        }
     }
 
     close(sock);

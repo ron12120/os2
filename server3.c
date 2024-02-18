@@ -207,15 +207,27 @@ int POST(int client_fd, char *path)
     char *encoded_data;
     ssize_t bytes_recv;
     char size[1024];
-    memset(size,0,1024);
+    memset(size, 0, 1024);
     bytes_recv = 0;
-    bytes_recv = recv(client_fd, size, 1024,0); // recving the size of the encripted file
+    sleep(1);
+    bytes_recv = recv(client_fd, size, 1024, 0); // recving the size of the encripted file
+    if (bytes_recv < 0)
+    {
+        perror("recv size failed");
+        return -1;
+    }
     printf("the size is: %s\n", size);
     int size_res = atoi(size);
     char response[size_res];
     memset(response, 0, size_res);
     bytes_recv = 0;
+    sleep(0.5);
     bytes_recv = recv(client_fd, response, size_res, 0); // recving the size of the encripted file
+    if (bytes_recv < 0)
+    {
+        perror("recv size failed");
+        return -1;
+    }
     printf("the response is: %s\n", response);
     if (Base64Encode(response, &encoded_data) != 0)
     {
