@@ -14,56 +14,45 @@
 #define PORT 80
 #define ADDR "127.0.0.1"
 
-struct flock fl = {
-    .l_type = F_WRLCK,
-    .l_whence = SEEK_SET,
-    .l_start = 0,
-    .l_len = 0,
-};
-
-int lockFile(const char *filepath)
+int lockFile(FILE *file)
 {
-    int fd;
+    // Convert FILE* to file descriptor
+    int file_descriptor = fileno(file);
 
-    if ((fd = open(filepath, O_RDWR)) == -1)
+    // Create a flock structure to specify the lock
+    struct flock file_lock;
+    file_lock.l_type = F_RDLCK;    // F_RDLCK for a read lock, F_WRLCK for a write lock
+    file_lock.l_whence = SEEK_SET; // Set the position for the lock to the beginning of the file
+    file_lock.l_start = 0;         // Start of the lock region
+    file_lock.l_len = 0;           // Length of the lock region (0 means to the end of the file)
+
+    // Attempt to acquire the lock
+    if (fcntl(file_descriptor, F_SETLK, &file_lock) == -1)
     {
-        perror("open");
+        perror("Error locking file");
         return -1;
     }
-
-    fl.l_type = F_RDLCK;
-
-    if (fcntl(fd, F_SETLKW, &fl) == -1)
-    {
-        perror("fcntl");
-        close(fd);
-        return -1;
-    }
-
-    close(fd);
     return 0;
 }
 
-int unlockFile(const char *filepath)
+int unlockFile(FILE *file)
 {
-    int fd;
+    // Convert FILE* to file descriptor
+    int file_descriptor = fileno(file);
 
-    if ((fd = open(filepath, O_RDWR)) == -1)
+    // Create a flock structure to specify unlocking
+    struct flock file_lock;
+    file_lock.l_type = F_UNLCK;
+    file_lock.l_whence = SEEK_SET;
+    file_lock.l_start = 0;
+    file_lock.l_len = 0;
+
+    // Release the lock
+    if (fcntl(file_descriptor, F_SETLK, &file_lock) == -1)
     {
-        perror("open");
         return -1;
     }
 
-    fl.l_type = F_UNLCK;
-
-    if (fcntl(fd, F_SETLK, &fl) == -1)
-    {
-        perror("fcntl");
-        close(fd);
-        return -1;
-    }
-
-    close(fd);
     return 0;
 }
 
@@ -146,8 +135,6 @@ int GET(int client_fd, char *path)
         send(client_fd, "404 FILE NOT FOUND\r\n\r\n", 23, 0);
         return -1; // Indicate failure
     }
-
-    lockFile(path);
 
     // Determine file size
     file_size = getFileSize(file);
@@ -239,9 +226,10 @@ int POST(int client_fd, char *path)
     {
         return -1; // Indicate failure
     }
-    // lockFile(path);
+    lockFile(file);
     printf("%s\n", encoded_data);
     fwrite(encoded_data, sizeof(char), strlen(encoded_data), file);
+    unlockFile(file);
     fclose(file);
     return 0;
 }
@@ -369,7 +357,6 @@ int main(int argc, char **argv)
                     close(sock);
                     exit(errno);
                 }
-                unlockFile(full_path);
             }
             else if (post_get == 0)
             {
@@ -380,7 +367,6 @@ int main(int argc, char **argv)
                     close(sock);
                     exit(errno);
                 }
-                // unlockFile(full_path);
             }
             exit(0); // Child process exits after handling
         }
