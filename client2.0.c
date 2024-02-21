@@ -9,10 +9,83 @@
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <math.h>
+#include <poll.h>
 
 #define BUFFER_SIZE 1024
 #define PORT 80
 #define ADDR "127.0.0.1"
+
+int isListFile(const char *filename)
+{
+    // Find the last occurrence of '.' in the filename
+    const char *dot = strrchr(filename, '.');
+
+    // Check if a dot is found and it's not the first character in the filename
+    if (dot != NULL && dot != filename)
+    {
+        // Compare the file extension (case-sensitive) with ".list"
+        if (strcmp(dot + 1, "list") == 0)
+        {
+            return 1; // File has the ".list" extension
+        }
+    }
+
+    return 0; // File does not have the ".list" extension
+}
+int countLines(const char *filename)
+{
+    FILE *file = fopen(filename, "r");
+    if (file == NULL)
+    {
+        perror("fopen failed");
+        return -1;
+    }
+    int count = 0;
+    int ch;
+    while ((ch = fgetc(file)) != EOF)
+    {
+        if (ch == '\n')
+            count++;
+    }
+    fclose(file);
+    return count;
+}
+char *getLineFromFile(const char *filename, int lineNumber)
+{
+    FILE *file = fopen(filename, "r");
+    char buffer[1024]; // Adjust the buffer size as needed
+    int currentLine = 0;
+
+    while (fgets(buffer, sizeof(buffer), file) != NULL)
+    {
+        currentLine++;
+
+        if (currentLine == lineNumber)
+        {
+            // Close the file before returning the result
+            fclose(file);
+            // Remove newline character at the end of the line
+            char *newlinePos = strchr(buffer, '\n');
+            if (newlinePos != NULL)
+            {
+                *newlinePos = '\0';
+            }
+            // Allocate memory for the line and copy the content
+            char *result = strdup(buffer);
+            if (result == NULL)
+            {
+                perror("Error allocating memory");
+            }
+            return result;
+        }
+    }
+
+    fclose(file);
+
+    // Line number is out of bounds
+    printf("Error: Line number %d not found in file.\n", lineNumber);
+    return NULL;
+}
 
 int getFileSize(FILE *file)
 {
@@ -176,14 +249,8 @@ void send_post_request(int socket, char *file_path)
     free(buffer);
 }
 
-int main(int argc, char *argv[])
+int openSock()
 {
-    if (argc != 3 || (strcmp(argv[1], "GET") != 0 && strcmp(argv[1], "POST") != 0))
-    {
-        fprintf(stderr, "Usage: %s <GET/POST> <remote_path>\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-
     int sock = -1;
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0)
@@ -212,9 +279,91 @@ int main(int argc, char *argv[])
     }
 
     printf("connected to server\n");
-
-    if (strcmp(argv[1], "GET") == 0)
+    return sock;
+}
+void setupfd(char *filename, int sock)
+{
+    printf("yuval");
+    send_get_request(sock, filename);
+    char size[BUFFER_SIZE];
+    sleep(1);
+    recv(sock, size, BUFFER_SIZE, 0);
+    int size_int = atoi(size);
+    sleep(1);
+    char response[size_int];
+    memset(response, 0, size_int);
+    recv(sock, response, size_int, 0);
+    char code[4];
+    strncpy(code, response, 3);
+    code[3] = '\0';
+    if (strcmp(code, "200") == 0)
     {
+        printf("200 ok\r\n\r\n");
+        char *base64con = getBase64Content(response);
+        FILE *file = fopen(filename, "wb");
+        if (file == NULL)
+        {
+            perror("fopen failed");
+            close(sock);
+            exit(errno);
+        }
+
+        unsigned char *buffer;
+        size_t decodedLength = 0;
+        Base64Decode(base64con, &buffer, &decodedLength);
+        fwrite(buffer, 1, decodedLength, file);
+
+        fclose(file);
+    }
+    else if (strcmp(code, "404") == 0)
+    {
+        printf("404 FILE NOT FOUND\r\n\r\n");
+    }
+    else
+    {
+        printf("500 INTERNAL ERROR\r\n\r\n");
+    }
+}
+
+int main(int argc, char **argv)
+{
+
+    if (argc != 3 || (strcmp(argv[1], "GET") != 0 && strcmp(argv[1], "POST") != 0))
+    {
+        fprintf(stderr, "Usage: %s <GET/POST> <remote_path>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+    if (isListFile(argv[2]))
+    {
+        int num_of_files = countLines(argv[2]);
+        struct pollfd fds[num_of_files];
+        for (int i = 0; i < num_of_files; i++)
+        {
+            fds[i].fd = openSock();
+            printf("yuval");
+            fds[i].events = POLLIN;
+        }
+        while (1)
+        {
+            if (poll(fds, num_of_files, -1) < 0)
+            {
+                perror("poll failed");
+                return -1;
+            }
+            for (int i = 0; i < num_of_files; i++)
+            {
+                
+                if (fds[i].revents && POLLIN)
+                {
+                    sleep(1);
+                    setupfd(getLineFromFile(argv[2], i + 1), fds[i].fd);
+                }
+            }
+        }
+    }
+    else if (strcmp(argv[1], "GET") == 0)
+    {
+        int sock=openSock();
         send_get_request(sock, argv[2]);
         char size[BUFFER_SIZE];
         sleep(1);
@@ -243,26 +392,27 @@ int main(int argc, char *argv[])
             size_t decodedLength = 0;
             Base64Decode(base64con, &buffer, &decodedLength);
             fwrite(buffer, 1, decodedLength, file);
-
             fclose(file);
+            close(sock);
         }
         else if (strcmp(code, "404") == 0)
         {
             printf("404 FILE NOT FOUND\r\n\r\n");
+            close(sock);
         }
         else
         {
             printf("500 INTERNAL ERROR\r\n\r\n");
+            close(sock);
         }
     }
     else if (strcmp(argv[1], "POST") == 0)
     {
+        int sock=openSock();
         send_post_request(sock, argv[2]);
         printf("File sent successfully.\n");
+        close(sock);
     }
-
-    // Close socket
-    close(sock);
 
     return 0;
 }

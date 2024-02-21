@@ -26,30 +26,35 @@ int getFileSize(FILE *file)
     return size;
 }
 
-int calcDecodeLength(const char *b64input) {
-    int len = strlen(b64input), padding = 0;
+int calcDecodeLength(const char *b64input)
+{
+    int len = strlen(b64input);
+    int padding = 0;
 
-    if (b64input[len - 1] == '=' && b64input[len - 2] == '=') //last two chars are =
+    if (b64input[len - 1] == '=' && b64input[len - 2] == '=') // last two chars are =
         padding = 2;
-    else if (b64input[len - 1] == '=') //last char is =
+    else if (b64input[len - 1] == '=') // last char is =
         padding = 1;
 
     return (int)len * 0.75 - padding;
 }
 
-int Base64Decode(char *b64message, unsigned char **buffer, size_t *length) {
+int Base64Decode(const char *b64message, unsigned char **buffer, size_t *outLen)
+{
     BIO *bio, *b64;
     int decodeLen = calcDecodeLength(b64message);
 
-    *buffer = (unsigned char*)malloc(decodeLen + 1);
-    if (*buffer == NULL) {
-        return -1; // Memory allocation failed
+    *buffer = (unsigned char *)malloc(decodeLen);
+    if (*buffer == NULL)
+    {
+        return 1; // Memory allocation failure
     }
 
-    FILE *stream = fmemopen(b64message, strlen(b64message), "r");
-    if (stream == NULL) {
+    FILE *stream = fmemopen((void *)b64message, strlen(b64message), "r");
+    if (!stream)
+    {
         free(*buffer);
-        return -1; // File stream open failed
+        return 2; // File stream open failure
     }
 
     b64 = BIO_new(BIO_f_base64());
@@ -58,46 +63,70 @@ int Base64Decode(char *b64message, unsigned char **buffer, size_t *length) {
     BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL); // Do not use newlines to flush buffer
 
     int len = BIO_read(bio, *buffer, strlen(b64message));
-    if (len != decodeLen) {
+    if (len != decodeLen)
+    {
         free(*buffer);
         BIO_free_all(bio);
         fclose(stream);
-        return -1; // Decode length mismatch
+        return 3; // Decode length mismatch or read failure
     }
 
-    (*buffer)[len] = '\0'; // Null-terminator for text data; not required for binary data
-    *length = len; // Return the length of the decoded data
+    *outLen = len; // Set the output length for the caller
 
     BIO_free_all(bio);
     fclose(stream);
 
     return 0; // Success
 }
-int Base64Encode(const unsigned char *message, size_t messageLen, char **buffer) {
+
+int Base64Encode(const unsigned char *message, size_t messageLen, char **buffer)
+{
     BIO *bio, *b64;
     FILE *stream;
     int encodedSize = 4 * ceil((double)messageLen / 3); // Calculate the size needed for the encoded data
-    *buffer = (char *)malloc(encodedSize + 1); // Allocate memory for the encoded string
+    *buffer = (char *)malloc(encodedSize + 1);          // Allocate memory for the encoded string
 
     stream = fmemopen(*buffer, encodedSize + 1, "w"); // Open a memory buffer for output
-    if (stream == NULL) {
+    if (stream == NULL)
+    {
         free(*buffer);
         return -1; // Return an error if the memory buffer couldn't be opened
     }
 
-    b64 = BIO_new(BIO_f_base64()); // Create a new BIO for base64
-    bio = BIO_new_fp(stream, BIO_NOCLOSE); // Create a new BIO that writes to the memory buffer
-    bio = BIO_push(b64, bio); // Chain the base64 BIO onto the buffer BIO
+    b64 = BIO_new(BIO_f_base64());              // Create a new BIO for base64
+    bio = BIO_new_fp(stream, BIO_NOCLOSE);      // Create a new BIO that writes to the memory buffer
+    bio = BIO_push(b64, bio);                   // Chain the base64 BIO onto the buffer BIO
     BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL); // Don't use newlines to flush buffer
 
     BIO_write(bio, message, messageLen); // Write the data to be encoded
-    BIO_flush(bio); // Flush the BIO to ensure all data is written
-    BIO_free_all(bio); // Free the BIO chain
-    fclose(stream); // Close the memory buffer
+    BIO_flush(bio);                      // Flush the BIO to ensure all data is written
+    BIO_free_all(bio);                   // Free the BIO chain
+    fclose(stream);                      // Close the memory buffer
 
     return 0; // Success
 }
-
+void handle_post_request(int client_socket, char* remote_path, char *server_path, char *base64)
+{
+    
+    unsigned char *buffer;
+    size_t size = 0;
+    Base64Decode(base64, &buffer, &size);
+    int path_size=strlen(server_path)+strlen(remote_path);
+    char fullpath[path_size];
+    memset(fullpath,0,path_size);
+    strcpy(fullpath, server_path);
+    strcat(fullpath, remote_path);
+    FILE *file = fopen(fullpath, "wb");
+    if (file == NULL)
+    {
+        perror("fopen failed");
+        close(client_socket);
+        exit(errno);
+    }
+    fwrite(buffer, 1, size, file);
+    fclose(file);
+    close(client_socket);
+}
 void handle_get_request(int client_socket, char *remote_path, char *server_path)
 {
     char full_path[BUFFER_SIZE];
@@ -111,28 +140,31 @@ void handle_get_request(int client_socket, char *remote_path, char *server_path)
     {
         // File not found, send 404 response
         printf("File not found: %s\n", full_path);
-        send(client_socket, "404 FILE NOT FOUND\r\n", strlen("404 FILE NOT FOUND\r\n"), 0);
+        char *size_msg = "23";
+        send(client_socket, size_msg, BUFFER_SIZE, 0);
+        sleep(0.5);
+        send(client_socket, "404 FILE NOT FOUND\r\n\r\n", 23, 0);
     }
 
     int size_file = getFileSize(file);
-    printf("size is:%d\n", size_file);
     char *buffer = (char *)malloc(size_file);
     if (buffer == NULL)
     {
         perror("malloc error");
         fclose(file);
+        char *size_msg = "23";
+        send(client_socket, size_msg, BUFFER_SIZE, 0);
+        sleep(0.5);
+        send(client_socket, "500 INTERNAL ERROR\r\n\r\n", 23, 0);
         close(client_socket);
         exit(EXIT_FAILURE);
     }
+    memset(buffer, 0, size_file);
     fread(buffer, 1, size_file, file);
     fclose(file);
     char size_res[BUFFER_SIZE];
     char *encoded_data;
-    Base64Encode(buffer,size_file, &encoded_data);
-    for(int i=0; i < strlen(encoded_data);i++)
-    {
-        printf("%02x", (unsigned char)encoded_data[i]);
-    }
+    Base64Encode(buffer, size_file, &encoded_data);
     int response_size = strlen("200 OK\r\n") + strlen(encoded_data) + strlen("\r\n\r\n");
     char response[response_size];
     strcpy(response, "200 OK\r\n");
@@ -142,8 +174,7 @@ void handle_get_request(int client_socket, char *remote_path, char *server_path)
     sleep(1);
     send(client_socket, size_res, BUFFER_SIZE, 0);
     sleep(1);
-    send(client_socket, response, strlen(response) + 1, 0);
-    printf("the encoded data is %s\n", response);
+    send(client_socket, response, response_size, 0);
     close(client_socket);
     free(buffer);
 }
@@ -172,6 +203,7 @@ void handle_client(int client_socket, char *server_path)
     char remote_path[BUFFER_SIZE];
 
     sscanf(buffer, "%s %s", request_type, remote_path);
+   
 
     if (strcmp(request_type, "GET") == 0)
     {
@@ -179,6 +211,10 @@ void handle_client(int client_socket, char *server_path)
     }
     else if (strcmp(request_type, "POST") == 0)
     {
+        int size_base64= size_res-10-strlen(remote_path);
+        char base64[size_base64];
+        sscanf(buffer, "%s %s\r\n%s", request_type, remote_path,base64);
+        handle_post_request(client_socket, remote_path, server_path,base64);
     }
     else
     {
@@ -240,8 +276,6 @@ int main(int argc, char *argv[])
     }
     printf("listening on: %s:%d\n", ADDR, PORT);
 
-    // Ignore SIGCHLD to prevent zombie processes
-    signal(SIGCHLD, SIG_IGN);
     // Accept connections and handle requests
     int new_socket;
     while (1)
@@ -269,14 +303,6 @@ int main(int argc, char *argv[])
             close(sock); // Close server socket in child process
             handle_client(new_socket, server_path);
             exit(EXIT_SUCCESS);
-        }
-        else
-        {
-            // Parent process
-            close(new_socket); // Close client socket in parent process
-            // Wait for any child process to avoid zombie processes
-            while (waitpid(-1, NULL, WNOHANG) > 0)
-                ;
         }
     }
 
