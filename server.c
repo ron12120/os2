@@ -99,7 +99,7 @@ int Base64Decode(const char *b64message, unsigned char **buffer, size_t *outLen)
     return 0; // Success
 }
 
-int Base64Encode(const unsigned char *message, size_t messageLen, char **buffer)
+int Base64Encode(char *message, size_t messageLen, char **buffer)
 {
     BIO *bio, *b64;
     FILE *stream;

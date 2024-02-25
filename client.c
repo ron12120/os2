@@ -95,7 +95,7 @@ int getFileSize(FILE *file)
     return size;
 }
 
-int Base64Encode(const unsigned char *message, size_t messageLen, char **buffer)
+int Base64Encode(char *message, size_t messageLen, char **buffer)
 {
     BIO *bio, *b64;
     FILE *stream;
