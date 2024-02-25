@@ -234,7 +234,7 @@ void send_post_request(int socket, char *file_path)
     fclose(file);
     char *encoded_data;
     Base64Encode(buffer, size_file, &encoded_data);
-    int response_size = strlen("POST\r\n") + strlen(file_path) + strlen("\r\n")+ strlen(encoded_data) + strlen("\r\n\r\n");
+    int response_size = strlen("POST\r\n") + strlen(file_path) + strlen("\r\n") + strlen(encoded_data) + strlen("\r\n\r\n");
     char response_size_str[BUFFER_SIZE];
     char response[response_size];
     strcpy(response, "POST\r\n");
@@ -243,7 +243,7 @@ void send_post_request(int socket, char *file_path)
     strcat(response, encoded_data);
     strcat(response, "\r\n\r\n");
     sprintf(response_size_str, "%d", response_size);
-    send(socket, response_size_str,BUFFER_SIZE,0);
+    send(socket, response_size_str, BUFFER_SIZE, 0);
     sleep(0.5);
     send(socket, response, response_size, 0);
     free(buffer);
@@ -281,49 +281,6 @@ int openSock()
     printf("connected to server\n");
     return sock;
 }
-void setupfd(char *filename, int sock)
-{
-    printf("yuval");
-    send_get_request(sock, filename);
-    char size[BUFFER_SIZE];
-    sleep(1);
-    recv(sock, size, BUFFER_SIZE, 0);
-    int size_int = atoi(size);
-    sleep(1);
-    char response[size_int];
-    memset(response, 0, size_int);
-    recv(sock, response, size_int, 0);
-    char code[4];
-    strncpy(code, response, 3);
-    code[3] = '\0';
-    if (strcmp(code, "200") == 0)
-    {
-        printf("200 ok\r\n\r\n");
-        char *base64con = getBase64Content(response);
-        FILE *file = fopen(filename, "wb");
-        if (file == NULL)
-        {
-            perror("fopen failed");
-            close(sock);
-            exit(errno);
-        }
-
-        unsigned char *buffer;
-        size_t decodedLength = 0;
-        Base64Decode(base64con, &buffer, &decodedLength);
-        fwrite(buffer, 1, decodedLength, file);
-
-        fclose(file);
-    }
-    else if (strcmp(code, "404") == 0)
-    {
-        printf("404 FILE NOT FOUND\r\n\r\n");
-    }
-    else
-    {
-        printf("500 INTERNAL ERROR\r\n\r\n");
-    }
-}
 
 int main(int argc, char **argv)
 {
@@ -333,43 +290,79 @@ int main(int argc, char **argv)
         fprintf(stderr, "Usage: %s <GET/POST> <remote_path>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-    if (isListFile(argv[2]))
+    if (isListFile(argv[2]) == 1)
     {
         int num_of_files = countLines(argv[2]);
         struct pollfd fds[num_of_files];
         for (int i = 0; i < num_of_files; i++)
         {
+            sleep(0.5);
             fds[i].fd = openSock();
-            printf("yuval");
             fds[i].events = POLLIN;
         }
-        while (1)
+
+        for (int i = 0; i < num_of_files; i++)
         {
-            if (poll(fds, num_of_files, -1) < 0)
+            sleep(0.5);
+            send_get_request(fds[i].fd, getLineFromFile(argv[2], i + 1));
+        }
+
+        if (poll(fds, num_of_files, -1) < 0)
+        {
+            perror("poll failed");
+            return -1;
+        }
+
+        for (int i = 0; i < num_of_files; i++)
+        {
+            char size[BUFFER_SIZE];
+            sleep(0.5);
+            recv(fds[i].fd, size, BUFFER_SIZE, 0);
+            int size_int = atoi(size);
+            sleep(0.5);
+            char response[size_int];
+            memset(response, 0, size_int);
+            recv(fds[i].fd, response, size_int, 0);
+            char code[4];
+            strncpy(code, response, 3);
+            code[3] = '\0';
+            if (strcmp(code, "200") == 0)
             {
-                perror("poll failed");
-                return -1;
-            }
-            for (int i = 0; i < num_of_files; i++)
-            {
-                
-                if (fds[i].revents && POLLIN)
+                printf("200 ok\r\n\r\n");
+                char *base64con = getBase64Content(response);
+                FILE *file = fopen(getLineFromFile(argv[2], i + 1), "wb");
+                if (file == NULL)
                 {
-                    sleep(1);
-                    setupfd(getLineFromFile(argv[2], i + 1), fds[i].fd);
+                    perror("fopen failed");
+                    close(fds[i].fd);
+                    exit(errno);
                 }
+
+                unsigned char *buffer;
+                size_t decodedLength = 0;
+                Base64Decode(base64con, &buffer, &decodedLength);
+                fwrite(buffer, 1, decodedLength, file);
+                fclose(file);
+            }
+            else if (strcmp(code, "404") == 0)
+            {
+                printf("404 FILE NOT FOUND\r\n\r\n");
+            }
+            else
+            {
+                printf("500 INTERNAL ERROR\r\n\r\n");
             }
         }
     }
     else if (strcmp(argv[1], "GET") == 0)
     {
-        int sock=openSock();
+        int sock = openSock();
         send_get_request(sock, argv[2]);
         char size[BUFFER_SIZE];
-        sleep(1);
+        sleep(0.5);
         recv(sock, size, BUFFER_SIZE, 0);
         int size_int = atoi(size);
-        sleep(1);
+        sleep(0.5);
         char response[size_int];
         memset(response, 0, size_int);
         recv(sock, response, size_int, 0);
@@ -408,7 +401,7 @@ int main(int argc, char **argv)
     }
     else if (strcmp(argv[1], "POST") == 0)
     {
-        int sock=openSock();
+        int sock = openSock();
         send_post_request(sock, argv[2]);
         printf("File sent successfully.\n");
         close(sock);

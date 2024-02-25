@@ -171,9 +171,9 @@ void handle_get_request(int client_socket, char *remote_path, char *server_path)
     strcat(response, encoded_data);
     strcat(response, "\r\n\r\n");
     sprintf(size_res, "%d", response_size);
-    sleep(1);
+    sleep(0.5);
     send(client_socket, size_res, BUFFER_SIZE, 0);
-    sleep(1);
+    sleep(0.5);
     send(client_socket, response, response_size, 0);
     close(client_socket);
     free(buffer);
