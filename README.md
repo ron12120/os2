@@ -30,8 +30,9 @@
 דוגמה להרצה של לקוח עם פקודת GET
 
 <br />
+![WhatsApp Image 2024-02-25 at 17 26 59 (2)](https://github.com/yuvit256/OS2/assets/76705730/ba2b98a0-efc2-432a-abc9-fa92ffcaeb6b)
 <br />
-![WhatsApp Image 2024-02-25 at 17 26 59 (2)](https://github.com/yuvit256/OS2/assets/76705730/22ada7e6-0f90-4dff-8140-72a1e53ead41)
+
 <br />
 ![WhatsApp Image 2024-02-25 at 17 27 31](https://github.com/yuvit256/OS2/assets/76705730/448e4f28-0843-48a4-a66a-2a3987c47d66)
 
