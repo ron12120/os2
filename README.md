@@ -3,6 +3,9 @@
 ***מטלה 2 מערכות הפעלה:***<br /> <br />
 בנינו Makefile רקורסיבי שמקמפל את כל הקבצים בתקיות על מנת להפעיל אותו יש להשתמש בפקודה make all ועל מנת למחוק את קובצי ההרצה יש לכתוב את הפקודה make clean.
 **דוגמת הרצת מייקפיל:**   <br />
+<br />
+![WhatsApp Image 2024-02-25 at 17 26 40](https://github.com/yuvit256/OS2/assets/76705730/37e128ef-e6dc-498d-aeb6-a6aa0b4fed89)
+<br />
 <br /><br />
 **חלק 1:**<br />
 בחלק זה בנינו שרת פשוט:<br /><br />
@@ -10,23 +13,24 @@
 <br />
 **דוגמת הרצה שרת:**   <br />
 
-![image](https://github.com/ron12120/OS1/assets/76705730/8097f3be-ec6f-4968-a2c5-2734e986d486)
+![WhatsApp Image 2024-02-25 at 17 26 40 (1)](https://github.com/yuvit256/OS2/assets/76705730/02ff7baf-92a9-4f35-b5bf-e445d491ce42)
+
 <br />
 
-כתבנו תוכנית הניגשת לזיכרון לא חוקי כלומר לא מאותחל.
-בתמונה אנו רואים קימפול והרצה ללא הפעלת הדגל של דיבאג.
+השרת מקבל שני סוגים של פקודות get ו post.
+דוגמה להרצה של לקוח עם פקודת POST:
 <br />
 
-![image](https://github.com/ron12120/OS1/assets/76705730/8097f3be-ec6f-4968-a2c5-2734e986d486)
+![WhatsApp Image 2024-02-25 at 17 28 27](https://github.com/yuvit256/OS2/assets/76705730/4f06b51a-c4f2-44bb-ad71-4a9821d9dac9)
 <br />
-וכאן אנו רואים הרצה עם הדגל של דיבאג.<br />
+<br />
+דוגמה להרצה של לקוח עם פקודת GET
 
-![image](https://github.com/ron12120/OS1/assets/76705730/4ae44c4d-49a7-4faf-8a6a-cd1c7906cfa1)
-
-הגדמת הצעדים  לקבלת core
 <br />
 
-![image](https://github.com/ron12120/OS1/assets/76705730/199f06fc-ea4c-4150-b177-53d9e6f976f0)
+<br />
+<br />
+![WhatsApp Image 2024-02-25 at 17 26 59 (2)](https://github.com/yuvit256/OS2/assets/76705730/818f1a95-69bd-40ac-ad2c-8bdb60cd295e)
 <br />
 הרצה של התוכנית בעזרת דיבאגר גרפי ddd:
 <br />
