@@ -18,6 +18,9 @@
 <br />
 
 השרת מקבל שני סוגים של פקודות get ו post.
+<br />
+אנחנו משתמשים בלקוח של סעיף ב על מנת לבדוק את השרת, הלקוח יודע לעבוד עם פעולות GET ו POST של קבצים וגם את הדרישות של סעיף ב' אותם נתאר בהמשך.
+<br />
 דוגמה להרצה של לקוח עם פקודת POST:
 <br />
 
@@ -27,12 +30,11 @@
 דוגמה להרצה של לקוח עם פקודת GET
 
 <br />
+<br />
+![WhatsApp Image 2024-02-25 at 17 26 59 (2)](https://github.com/yuvit256/OS2/assets/76705730/22ada7e6-0f90-4dff-8140-72a1e53ead41)
+<br />
+![WhatsApp Image 2024-02-25 at 17 27 31](https://github.com/yuvit256/OS2/assets/76705730/448e4f28-0843-48a4-a66a-2a3987c47d66)
 
-<br />
-<br />
-![WhatsApp Image 2024-02-25 at 17 26 59 (2)](https://github.com/yuvit256/OS2/assets/76705730/818f1a95-69bd-40ac-ad2c-8bdb60cd295e)
-<br />
-הרצה של התוכנית בעזרת דיבאגר גרפי ddd:
 <br />
 
 ![image](https://github.com/ron12120/OS1/assets/117669404/972ad3be-afb8-409d-be33-cfc0406238ec)
