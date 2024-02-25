@@ -18,6 +18,27 @@
 #define PORT 80
 #define ADDR "127.0.0.1"
 
+int lockFile(FILE *file, int lockType) {
+    int fd = fileno(file);
+    struct flock fl;
+
+    // Initialize the lock structure
+    fl.l_type = lockType;
+    fl.l_whence = SEEK_SET;
+    fl.l_start = 0;
+    fl.l_len = 0;
+
+    // Try to acquire/release the lock
+    if (fcntl(fd, lockType == F_UNLCK ? F_SETLK : F_SETLKW, &fl) == -1) {
+        perror(lockType == F_UNLCK ? "Failed to unlock file" : "Failed to lock file");
+        return -1;
+    }
+
+    printf("File %s successfully\n", lockType == F_UNLCK ? "unlocked" : "locked");
+
+    return 0;
+}
+
 int getFileSize(FILE *file)
 {
     fseek(file, 0, SEEK_END);
@@ -49,7 +70,6 @@ int Base64Decode(const char *b64message, unsigned char **buffer, size_t *outLen)
     {
         return 1; // Memory allocation failure
     }
-
     FILE *stream = fmemopen((void *)b64message, strlen(b64message), "r");
     if (!stream)
     {
@@ -105,9 +125,9 @@ int Base64Encode(const unsigned char *message, size_t messageLen, char **buffer)
 
     return 0; // Success
 }
+
 void handle_post_request(int client_socket, char* remote_path, char *server_path, char *base64)
-{
-    
+{ 
     unsigned char *buffer;
     size_t size = 0;
     Base64Decode(base64, &buffer, &size);
@@ -123,10 +143,13 @@ void handle_post_request(int client_socket, char* remote_path, char *server_path
         close(client_socket);
         exit(errno);
     }
+    lockFile(file, F_WRLCK);
     fwrite(buffer, 1, size, file);
+    lockFile(file, F_UNLCK);
     fclose(file);
     close(client_socket);
 }
+
 void handle_get_request(int client_socket, char *remote_path, char *server_path)
 {
     char full_path[BUFFER_SIZE];
@@ -268,7 +291,7 @@ int main(int argc, char *argv[])
         exit(errno);
     }
 
-    if (listen(sock, 10) < 0)
+    if (listen(sock, 100) < 0)
     {
         perror("listen failed");
         close(sock);
