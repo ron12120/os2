@@ -273,7 +273,7 @@ int openSock()
 
     if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
-        perror("bind failed");
+        perror("connect failed");
         close(sock);
         exit(errno);
     }
