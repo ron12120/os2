@@ -323,11 +323,11 @@ int main(int argc, char *argv[])
         if (pid == 0)
         {
             // Child process
-            close(sock); // Close server socket in child process
             handle_client(new_socket, server_path);
             exit(EXIT_SUCCESS);
         }
     }
 
+    close(sock); // Close server socket
     return 0;
 }
